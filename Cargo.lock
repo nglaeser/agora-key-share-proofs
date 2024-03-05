@@ -9,12 +9,15 @@ dependencies = [
  "blsful",
  "hex",
  "maplit",
+ "merlin",
  "rand",
  "rand_chacha",
  "serde",
  "serde_bare",
  "serde_json",
+ "sha2",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]

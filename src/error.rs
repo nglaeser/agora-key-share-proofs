@@ -6,6 +6,9 @@ pub enum KeyShareProofError {
     /// A general purpose error message
     #[error("an error occurred: '{0}'")]
     General(String),
+    /// The proof is invalid
+    #[error("Pedersen ZK Proof verification failed")]
+    InvalidPedersenProof,
 }
 
 /// Result type for key share proof operations

@@ -22,11 +22,13 @@
 mod dense;
 mod error;
 mod kzg;
+mod pedersen;
 mod sparse;
 mod utils;
 
 pub use dense::*;
 pub use error::*;
 pub use kzg::*;
+pub use pedersen::*;
 pub use sparse::*;
 use utils::*;

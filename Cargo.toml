@@ -6,10 +6,13 @@ edition = "2021"
 [dependencies]
 blsful = "2.5"
 hex = "0.4"
+merlin = "3"
 rand = "0.8"
 serde = "1.0"
 serde_bare = "0.5"
+sha2 = "0.10"
 thiserror = "1.0"
+zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 maplit = "1"
