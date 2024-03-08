@@ -21,6 +21,7 @@
 
 mod dense;
 mod error;
+mod hash;
 mod kzg;
 mod pedersen;
 mod sparse;
@@ -28,6 +29,7 @@ mod utils;
 
 pub use dense::*;
 pub use error::*;
+pub use hash::*;
 pub use kzg::*;
 pub use pedersen::*;
 pub use sparse::*;

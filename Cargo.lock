@@ -16,6 +16,7 @@ dependencies = [
  "serde_bare",
  "serde_json",
  "sha2",
+ "subtle",
  "thiserror",
  "zeroize",
 ]
