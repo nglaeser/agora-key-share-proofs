@@ -20,6 +20,7 @@
 )]
 
 mod dense;
+mod encrypt;
 mod error;
 mod hash;
 mod kzg;
