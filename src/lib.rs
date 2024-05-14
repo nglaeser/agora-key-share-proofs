@@ -27,6 +27,8 @@ mod kzg;
 mod pedersen;
 mod sparse;
 mod utils;
+mod cold;
+mod client;
 
 pub use dense::*;
 pub use error::*;

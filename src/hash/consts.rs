@@ -4,9 +4,13 @@ use rand_chacha::ChaChaRng;
 use sha2::digest::Reset;
 
 /// The total number of compressed bytes in a G1 point times 3
-pub const TOTAL_POINT_BYTES: usize = 48 * 3;
+pub const G1_TOTAL_POINT_BYTES: usize = 48 * 3;
 /// The total number of bits to operate over in the hash function
-pub const TOTAL_HASH_PARAMETER_BITS: usize = TOTAL_POINT_BYTES * 8;
+pub const G1_TOTAL_HASH_PARAMETER_BITS: usize = G1_TOTAL_POINT_BYTES * 8;
+/// The total number of compressed bytes in a G1 point times 3
+pub const G2_TOTAL_POINT_BYTES: usize = 96 * 3;
+/// The total number of bits to operate over in the hash function
+pub const G2_TOTAL_HASH_PARAMETER_BITS: usize = G2_TOTAL_POINT_BYTES * 8;
 /// The prime number 113910913923300788319699387848674650656041243163866388656000063249848353322899
 /// which is also a cunningham chain of the first kind with a length of 5
 pub const PARAMETER_SEED_RNG: [u8; 32] = [
@@ -14,10 +18,17 @@ pub const PARAMETER_SEED_RNG: [u8; 32] = [
     0x45, 0x8d, 0xe5, 0xdb, 0xb1, 0xe5, 0x3a, 0xf6, 0x15, 0xa1, 0x1d, 0x8c, 0xe1, 0x4a, 0xd7, 0xfb,
 ];
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum HashPoint {
+    G1,
+    G2,
+}
+
 #[derive(Debug, Clone)]
 pub struct UniversalHashIter {
     rng: ChaChaRng,
     index: usize,
+    total_bytes: usize,
 }
 
 impl Default for UniversalHashIter {
@@ -25,6 +36,7 @@ impl Default for UniversalHashIter {
         UniversalHashIter {
             rng: ChaChaRng::from_seed(PARAMETER_SEED_RNG),
             index: 0,
+            total_bytes: 0,
         }
     }
 }
@@ -40,13 +52,27 @@ impl Iterator for UniversalHashIter {
     type Item = (Scalar, Scalar);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < TOTAL_HASH_PARAMETER_BITS {
+        if self.index < self.total_bytes {
             let zero = Scalar::random(&mut self.rng);
             let one = Scalar::random(&mut self.rng);
             self.index += 1;
             Some((zero, one))
         } else {
             None
+        }
+    }
+}
+
+impl UniversalHashIter {
+    pub fn new(point: HashPoint) -> Self {
+        let total_bytes = match point {
+            HashPoint::G1 => G1_TOTAL_POINT_BYTES,
+            HashPoint::G2 => G2_TOTAL_POINT_BYTES,
+        };
+        UniversalHashIter {
+            rng: ChaChaRng::from_seed(PARAMETER_SEED_RNG),
+            index: 0,
+            total_bytes,
         }
     }
 }

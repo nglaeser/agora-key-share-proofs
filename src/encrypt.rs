@@ -132,12 +132,12 @@ impl DecryptionKey {
 
     /// Get the encryption key associated with this decryption key
     pub fn encryption_key(&self) -> EncryptionKey {
-        EncryptionKey(G1Projective::GENERATOR * self.0)
+        EncryptionKey(G2Projective::GENERATOR * self.0)
     }
 
     /// Decrypt a ciphertext
     pub fn decrypt(&self, c: Ciphertext) -> Scalar {
-        c.c2 - Universal::hash(&[
+        c.c2 - Universal::hash_g1(&[
             c.c1 * self.0,
             G1Projective::IDENTITY,
             G1Projective::IDENTITY,
@@ -147,11 +147,11 @@ impl DecryptionKey {
 
 /// The encryption key
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct EncryptionKey(pub G1Projective);
+pub struct EncryptionKey(pub G2Projective);
 
 impl From<&DecryptionKey> for EncryptionKey {
     fn from(d: &DecryptionKey) -> EncryptionKey {
-        EncryptionKey(G1Projective::GENERATOR * d.0)
+        EncryptionKey(G2Projective::GENERATOR * d.0)
     }
 }
 
@@ -173,14 +173,14 @@ impl From<EncryptionKey> for Vec<u8> {
     }
 }
 
-impl From<&EncryptionKey> for [u8; 48] {
-    fn from(d: &EncryptionKey) -> [u8; 48] {
+impl From<&EncryptionKey> for [u8; 96] {
+    fn from(d: &EncryptionKey) -> [u8; 96] {
         d.0.to_compressed()
     }
 }
 
-impl From<EncryptionKey> for [u8; 48] {
-    fn from(d: EncryptionKey) -> [u8; 48] {
+impl From<EncryptionKey> for [u8; 96] {
+    fn from(d: EncryptionKey) -> [u8; 96] {
         Self::from(&d)
     }
 }
@@ -192,7 +192,7 @@ impl TryFrom<&[u8]> for EncryptionKey {
         let bytes = bytes
             .try_into()
             .map_err(|_| KeyShareProofError::General("Invalid bytes length".to_string()))?;
-        let s = Option::<G1Projective>::from(G1Projective::from_compressed(&bytes))
+        let s = Option::<G2Projective>::from(G2Projective::from_compressed(&bytes))
             .ok_or(KeyShareProofError::General("Invalid bytes".to_string()))?;
         Ok(Self(s))
     }
@@ -251,11 +251,4 @@ impl FromStr for EncryptionKey {
 }
 
 impl EncryptionKey {
-    /// Encrypt a message
-    pub fn encrypt(&self, m: Scalar, mut rng: impl RngCore + CryptoRng) -> Ciphertext {
-        let r = Scalar::random(&mut rng);
-        let c1 = G1Projective::GENERATOR * r;
-        let c2 = m + Universal::hash(&[self.0 * r, G1Projective::IDENTITY, G1Projective::IDENTITY]);
-        Ciphertext { c1, c2 }
-    }
 }
