@@ -4,7 +4,7 @@ use itertools::*;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::DefaultIsZeroes;
-use crate::{ClientRegisterPayload, DensePolyPrimeField, EncryptionKeys, KeyShareProofError, KeyShareProofResult, KZG10CommonReferenceParams};
+use crate::{ClientRegisterPayload, DensePolyPrimeField, EncryptionKeys, KeyShareProofError, KeyShareProofResult, KZG10CommonReferenceParams, Universal};
 
 /// The verification key for the client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -66,7 +66,7 @@ impl SigningKey {
     }
 
     /// Generate encrypted shares for hot storage wallets
-    pub fn generate_register_payloads<W: AsRef<EncryptionKeys>>(
+    pub fn generate_register_payloads<W: AsRef<[EncryptionKeys]>>(
         &self,
         threshold: usize,
         crs: &KZG10CommonReferenceParams,
@@ -75,7 +75,7 @@ impl SigningKey {
     ) -> KeyShareProofResult<Vec<ClientRegisterPayload>>
     {
         let encryption_keys = hot_wallet_encryption_keys.as_ref();
-        let (shares, poly) = self.create_shares(threshold, encryption_keys.0.len(), &mut rng)?;
+        let (shares, poly) = self.create_shares(threshold, encryption_keys.len(), &mut rng)?;
         let mut register_payloads = vec![ClientRegisterPayload::default(); shares.len()];
 
         let domain_size = threshold.next_power_of_two();
@@ -93,6 +93,11 @@ impl SigningKey {
 
         let dt_poly = aux_domain.ifft(&dt_evals);
         let result = domain.fft(&dt_poly[domain_size..]);
+
+        for ((payload, share), encryption_key) in register_payloads.iter_mut().zip(shares.iter()).zip(encryption_keys) {
+            payload.encrypted_share = share.share + Universal::hash_g2(&[encryption_key.0[0].0 * self.0, encryption_key.0[1].0 * self.0]);
+            payload.verification_share = G2Projective::GENERATOR * share.share;
+        }
 
         Ok(register_payloads)
     }
