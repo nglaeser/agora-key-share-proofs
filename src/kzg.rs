@@ -45,19 +45,23 @@ impl KZG10CommonReferenceParams {
 
     /// Commit to a polynomial in the G1 group
     pub fn commit_g1(&self, polynomial: &DensePolyPrimeField<Scalar>) -> G1Projective {
-        G1Projective::sum_of_products(&self.powers_of_g, &polynomial.0)
+        if polynomial.0.len() > self.powers_of_g.len() {
+            panic!("Polynomial degree is too high for the CRS");
+        }
+        // Allow for smaller polynomials
+        G1Projective::sum_of_products(&self.powers_of_g[..polynomial.0.len()], &polynomial.0)
     }
 
     /// Open a polynomial in the G1 group
-    pub fn open(&self, fx: &DensePolyPrimeField<Scalar>, i: Scalar) -> G1Projective {
+    pub fn open(&self, fx: &DensePolyPrimeField<Scalar>, challenge: Scalar) -> G1Projective {
         // f(x)
-        let eval = fx.evaluate(&i);
+        let eval = fx.evaluate(&challenge);
         // f(i)
         let eval_poly = DensePolyPrimeField(vec![eval]);
         // f(x) - f(i)
         let num = fx - &eval_poly;
         // x - i
-        let den = DensePolyPrimeField(vec![-i, Scalar::ONE]);
+        let den = DensePolyPrimeField(vec![-challenge, Scalar::ONE]);
         // (f(x) - f(i)) / (x - i)
         let (quo, _) = num.poly_mod(&den);
         // π = Com(crs, q_i(x))
@@ -81,15 +85,12 @@ impl KZG10CommonReferenceParams {
         let rhs = self.powers_of_h[1] - G2Projective::GENERATOR * i;
 
         // e(com_f / g1^Y, -g2) . e(π, g2^𝜏 / g2^i) == 1
-        if multi_miller_loop(&[
+        let res = multi_miller_loop(&[
             (&lhs.to_affine(), &G2Prepared::from(-G2Affine::generator())),
             (&proof.to_affine(), &G2Prepared::from(rhs.to_affine())),
-        ])
-        .final_exponentiation()
-        .is_identity()
-        .unwrap_u8()
-            == 1
-        {
+        ]).final_exponentiation().is_identity();
+
+        if bool::from(res) {
             Ok(())
         } else {
             Err(KeyShareProofError::General("invalid proof".to_string()))

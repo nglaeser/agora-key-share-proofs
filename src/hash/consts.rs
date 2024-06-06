@@ -3,12 +3,12 @@ use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use sha2::digest::Reset;
 
-/// The total number of compressed bytes in a G1 point times 3
-pub const G1_TOTAL_POINT_BYTES: usize = 48 * 3;
+/// The total number of compressed bytes in a G1 point times 2
+pub const G1_TOTAL_POINT_BYTES: usize = 48 * 2;
 /// The total number of bits to operate over in the hash function
 pub const G1_TOTAL_HASH_PARAMETER_BITS: usize = G1_TOTAL_POINT_BYTES * 8;
-/// The total number of compressed bytes in a G1 point times 3
-pub const G2_TOTAL_POINT_BYTES: usize = 96 * 3;
+/// The total number of compressed bytes in a G2 point times 2
+pub const G2_TOTAL_POINT_BYTES: usize = 96 * 2;
 /// The total number of bits to operate over in the hash function
 pub const G2_TOTAL_HASH_PARAMETER_BITS: usize = G2_TOTAL_POINT_BYTES * 8;
 /// The prime number 113910913923300788319699387848674650656041243163866388656000063249848353322899

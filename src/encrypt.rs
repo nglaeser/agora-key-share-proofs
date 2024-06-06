@@ -1,4 +1,4 @@
-use crate::{KeyShareProofError, Universal};
+use crate::KeyShareProofError;
 use blsful::inner_types::*;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -7,27 +7,6 @@ use std::{
     str::FromStr,
 };
 use zeroize::DefaultIsZeroes;
-
-/// El-Gamal like ciphertext except the difference is c2 is a scalar and computed
-/// as m + H(Q^r) where Q is the public key and r is the random scalar.
-/// c1 is computed as normal El-Gamal
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct Ciphertext {
-    /// The first component of the ciphertext
-    pub c1: G1Projective,
-    /// The second component of the ciphertext
-    pub c2: Scalar,
-}
-
-impl Ciphertext {
-    /// Shift the ciphertext by delta
-    pub fn shift(&self, delta: Scalar) -> Self {
-        Self {
-            c1: self.c1,
-            c2: self.c2 + delta,
-        }
-    }
-}
 
 /// The decryption key
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -133,15 +112,6 @@ impl DecryptionKey {
     /// Get the encryption key associated with this decryption key
     pub fn encryption_key(&self) -> EncryptionKey {
         EncryptionKey(G2Projective::GENERATOR * self.0)
-    }
-
-    /// Decrypt a ciphertext
-    pub fn decrypt(&self, c: Ciphertext) -> Scalar {
-        c.c2 - Universal::hash_g1(&[
-            c.c1 * self.0,
-            G1Projective::IDENTITY,
-            G1Projective::IDENTITY,
-        ])
     }
 }
 

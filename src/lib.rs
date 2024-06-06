@@ -29,7 +29,10 @@ mod sparse;
 mod utils;
 mod cold;
 mod client;
+mod hot;
 
+pub use client::*;
+pub use cold::*;
 pub use dense::*;
 pub use error::*;
 pub use hash::*;
