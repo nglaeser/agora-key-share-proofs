@@ -1,7 +1,7 @@
 use blsful::inner_types::*;
 use rand::{RngCore, CryptoRng};
 use serde::{Deserialize, Serialize};
-use subtle::Choice;
+use subtle::{Choice, ConstantTimeEq};
 use zeroize::DefaultIsZeroes;
 use crate::client::VerificationKey;
 use crate::encrypt::*;
@@ -87,7 +87,7 @@ impl EncryptionKeys {
         let si = Scalar::random(&mut rand::rngs::OsRng);
         let blinded_proof = current_opening + params.h * si;
         let shift_proof = G2Projective::GENERATOR * -r + (crs.powers_of_h[1] - crs.powers_of_h[0]) * -si;
-        HotStorageProof { a_comm_ped, t1, t2, blinded_proof, shift_proof, current_opening }
+        HotStorageProof { comm_ped, a_comm_ped, t1, t2, blinded_proof, shift_proof, current_opening }
     }
 }
 
@@ -159,6 +159,8 @@ impl ColdStorageProof {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default)]
 pub struct HotStorageProof {
     /// The commitment to the encrypted share
+    pub comm_ped: G1Projective,
+    /// The proof to the encrypted share
     pub a_comm_ped: G1Projective,
     /// The first proof
     pub t1: Scalar,
@@ -174,16 +176,24 @@ pub struct HotStorageProof {
 
 impl HotStorageProof {
     /// Verify the hot storage proof
-    pub fn verify(&self, crs: &KZG10CommonReferenceParams) -> KeyShareProofResult<()> {
+    pub fn verify(&self, crs: &KZG10CommonReferenceParams, block_id: u64) -> KeyShareProofResult<()> {
         let params = PedersenCommitmentParams::default();
         let args = [
-            ((self.current_opening - self.a_comm_ped).to_affine(), G2Prepared::from(-crs.powers_of_h[0].to_affine())),
+            ((self.current_opening - self.comm_ped).to_affine(), G2Prepared::from(-crs.powers_of_h[0].to_affine())),
             (self.blinded_proof.to_affine(), G2Prepared::from((crs.powers_of_h[1] - crs.powers_of_h[0]).to_affine())),
             (params.h.to_affine(), G2Prepared::from(self.shift_proof.to_affine())),
         ];
         let ref_args = args.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
 
-        if multi_miller_loop(&ref_args).final_exponentiation().is_identity().into() {
+        let mut bytes = [0u8; 96 + 8];
+        bytes[..96].copy_from_slice(self.a_comm_ped.to_compressed().as_ref());
+        bytes[96..].copy_from_slice(&block_id.to_be_bytes());
+        let c = Scalar::hash::<ExpandMsgXmd<sha2::Sha256>>(&bytes, b"BLS12381_XMD:SHA-256_RO_NUL_");
+        let lhs = self.a_comm_ped + self.comm_ped * c;
+        let rhs = params.commit(self.t1, self.t2);
+
+
+        if bool::from(lhs.ct_eq(&rhs) & multi_miller_loop(&ref_args).final_exponentiation().is_identity()) {
             Ok(())
         } else {
             Err(KeyShareProofError::General("invalid hot storage proof".to_string()))
