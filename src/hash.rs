@@ -45,10 +45,7 @@ impl Universal {
 #[ignore]
 #[test]
 fn test_universal_hash() {
-    let input = [
-        G1Projective::generator(),
-        G1Projective::generator(),
-    ];
+    let input = [G1Projective::generator(), G1Projective::generator()];
     let output = Universal::hash_g1(&input);
     assert_eq!(
         output,

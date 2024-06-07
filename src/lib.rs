@@ -19,17 +19,17 @@
     trivial_numeric_casts
 )]
 
+mod client;
+mod cold;
 mod dense;
 mod encrypt;
 mod error;
 mod hash;
+mod hot;
 mod kzg;
 mod pedersen;
 mod sparse;
 mod utils;
-mod cold;
-mod client;
-mod hot;
 
 pub use client::*;
 pub use cold::*;

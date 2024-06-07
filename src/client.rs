@@ -1,10 +1,13 @@
+use crate::{
+    ClientRegisterPayload, DensePolyPrimeField, EncryptionKeys, KZG10CommonReferenceParams,
+    KeyShareProofError, KeyShareProofResult, Universal,
+};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use blsful::inner_types::{Field, G2Projective, Scalar};
 use itertools::*;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::DefaultIsZeroes;
-use crate::{ClientRegisterPayload, DensePolyPrimeField, EncryptionKeys, KeyShareProofError, KeyShareProofResult, KZG10CommonReferenceParams, Universal};
 
 /// The verification key for the client
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -24,12 +27,21 @@ impl DefaultIsZeroes for SigningKey {}
 
 impl SigningKey {
     /// Create secret shares
-    pub fn create_shares(&self, threshold: usize, num_shares: usize, mut rng: impl RngCore + CryptoRng) -> KeyShareProofResult<(Vec<SigningKeyShare>, DensePolyPrimeField<Scalar>)> {
+    pub fn create_shares(
+        &self,
+        threshold: usize,
+        num_shares: usize,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> KeyShareProofResult<(Vec<SigningKeyShare>, DensePolyPrimeField<Scalar>)> {
         if threshold > num_shares {
-            return Err(KeyShareProofError::General("Threshold cannot be greater than the number of shares".to_string()));
+            return Err(KeyShareProofError::General(
+                "Threshold cannot be greater than the number of shares".to_string(),
+            ));
         }
         if threshold < 2 {
-            return Err(KeyShareProofError::General("Threshold must be at least 2".to_string()));
+            return Err(KeyShareProofError::General(
+                "Threshold must be at least 2".to_string(),
+            ));
         }
         let mut shares = vec![SigningKeyShare::default(); num_shares];
         let mut polynomial = DensePolyPrimeField::random(threshold, &mut rng);
@@ -47,20 +59,34 @@ impl SigningKey {
     /// Reconstruct the signing key from the shares
     pub fn from_shares(shares: &[SigningKeyShare]) -> KeyShareProofResult<Self> {
         if shares.len() < 2 {
-            return Err(KeyShareProofError::General("At least 2 shares are required".to_string()));
+            return Err(KeyShareProofError::General(
+                "At least 2 shares are required".to_string(),
+            ));
         }
         if shares.len() < shares[0].threshold as usize {
-            return Err(KeyShareProofError::General("Not enough shares to reconstruct the key".to_string()));
+            return Err(KeyShareProofError::General(
+                "Not enough shares to reconstruct the key".to_string(),
+            ));
         }
         if !shares.iter().map(|s| s.id).all_unique() {
-            return Err(KeyShareProofError::General("Shares must have unique indices".to_string()));
+            return Err(KeyShareProofError::General(
+                "Shares must have unique indices".to_string(),
+            ));
         }
         if shares.iter().any(|s| s.id == 0) {
-            return Err(KeyShareProofError::General("Shares must have indices greater than 0".to_string()));
+            return Err(KeyShareProofError::General(
+                "Shares must have indices greater than 0".to_string(),
+            ));
         }
-        let shares = shares.iter().map(|s| (Scalar::from(s.id as u64), s.share)).collect_vec();
+        let shares = shares
+            .iter()
+            .map(|s| (Scalar::from(s.id as u64), s.share))
+            .collect_vec();
         let identifiers = shares.iter().map(|&s| s.0).collect_vec();
-        let key = shares.iter().map(|&(i, s)| lagrange(i, identifiers.as_slice()) * s).sum();
+        let key = shares
+            .iter()
+            .map(|&(i, s)| lagrange(i, identifiers.as_slice()) * s)
+            .sum();
 
         Ok(Self(key))
     }
@@ -72,18 +98,33 @@ impl SigningKey {
         crs: &KZG10CommonReferenceParams,
         mut rng: impl RngCore + CryptoRng,
         hot_wallet_encryption_keys: W,
-    ) -> KeyShareProofResult<Vec<ClientRegisterPayload>>
-    {
+    ) -> KeyShareProofResult<Vec<ClientRegisterPayload>> {
         let encryption_keys = hot_wallet_encryption_keys.as_ref();
         let (shares, poly) = self.create_shares(threshold, encryption_keys.len(), &mut rng)?;
         let mut register_payloads = vec![ClientRegisterPayload::default(); shares.len()];
 
+        let encrypted_shares = shares
+            .iter()
+            .zip(encryption_keys)
+            .map(|(share, encryption_key)| {
+                share.share
+                    + Universal::hash_g2(&[
+                        encryption_key.0[0].0 * self.0,
+                        encryption_key.0[1].0 * self.0,
+                    ])
+            })
+            .collect::<Vec<_>>();
+
+        let quotients = self.get_quotients(&poly, &encrypted_shares);
+
         let domain_size = threshold.next_power_of_two();
-        let domain = GeneralEvaluationDomain::<Scalar>::new(domain_size).expect("Failed to create domain");
-        let aux_domain = GeneralEvaluationDomain::<Scalar>::new(domain_size * 2).expect("Failed to create aux_domain");
+        let domain =
+            GeneralEvaluationDomain::<Scalar>::new(domain_size).expect("Failed to create domain");
+        let aux_domain = GeneralEvaluationDomain::<Scalar>::new(domain_size * 2)
+            .expect("Failed to create aux_domain");
 
         let t_evals = aux_domain.fft(&crs.powers_of_g);
-        let d_evals = aux_domain.fft(&poly.0);
+        let d_evals = aux_domain.fft(&quotients.0);
 
         let dt_evals = t_evals
             .iter()
@@ -92,14 +133,76 @@ impl SigningKey {
             .collect::<Vec<_>>();
 
         let dt_poly = aux_domain.ifft(&dt_evals);
-        let result = domain.fft(&dt_poly[domain_size..]);
+        let opening_proofs = domain.fft(&dt_poly[domain_size..]);
 
-        for ((payload, share), encryption_key) in register_payloads.iter_mut().zip(shares.iter()).zip(encryption_keys) {
-            payload.encrypted_share = share.share + Universal::hash_g2(&[encryption_key.0[0].0 * self.0, encryption_key.0[1].0 * self.0]);
-            payload.verification_share = G2Projective::GENERATOR * share.share;
+        for (i, payload) in register_payloads.iter_mut().enumerate() {
+            payload.encrypted_share = encrypted_shares[i];
+            payload.verification_share = G2Projective::GENERATOR * shares[i].share;
+            payload.proof = opening_proofs[i];
+            payload.commitment = crs.commit_g1(&DensePolyPrimeField(vec![
+                -encrypted_shares[i],
+                Scalar::ONE,
+            ]));
         }
 
         Ok(register_payloads)
+    }
+
+    fn get_quotients(
+        &self,
+        fx: &DensePolyPrimeField<Scalar>,
+        challenges: &[Scalar],
+    ) -> DensePolyPrimeField<Scalar> {
+        let mut zero_poly = DensePolyPrimeField(vec![-challenges[0], Scalar::ONE]);
+        for i in 1..challenges.len() {
+            zero_poly *= DensePolyPrimeField(vec![-challenges[i], Scalar::ONE]);
+        }
+        let mut values = vec![Scalar::ZERO; challenges.len()];
+        for (value, challenge) in values.iter_mut().zip(challenges) {
+            *value = fx.evaluate(challenge);
+        }
+        let mut lagrange_poly = Self::interpolate_poly(challenges, &values);
+        lagrange_poly.0.resize(fx.0.len(), Scalar::ZERO); //pad with zeros
+
+        let mut numerator = DensePolyPrimeField(vec![Scalar::ZERO; challenges.len()]);
+        for (num, (c1, c2)) in numerator
+            .0
+            .iter_mut()
+            .zip(fx.0.iter().zip(lagrange_poly.0.iter()))
+        {
+            *num = *c1 - *c2;
+        }
+
+        numerator.poly_mod(&zero_poly).0
+    }
+
+    fn interpolate_poly(challenges: &[Scalar], values: &[Scalar]) -> DensePolyPrimeField<Scalar> {
+        debug_assert_eq!(challenges.len(), values.len());
+
+        let mut result = DensePolyPrimeField(vec![Scalar::ZERO; challenges.len()]);
+
+        for i in 0..challenges.len() {
+            let mut num = DensePolyPrimeField::one();
+            let mut den = Scalar::ONE;
+
+            for j in 0..challenges.len() {
+                if i == j {
+                    continue;
+                }
+                debug_assert_ne!(challenges[i], challenges[j]);
+                num *= DensePolyPrimeField(vec![-challenges[j], Scalar::ONE]);
+                den *= challenges[i] - challenges[j];
+            }
+            let den_inv = den.invert().expect("denominator to not be zero");
+            let term = DensePolyPrimeField(
+                num.0
+                    .iter()
+                    .map(|x| x * values[i] * den_inv)
+                    .collect::<Vec<_>>(),
+            );
+            result += term;
+        }
+        result
     }
 }
 

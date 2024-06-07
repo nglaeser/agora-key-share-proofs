@@ -88,7 +88,9 @@ impl KZG10CommonReferenceParams {
         let res = multi_miller_loop(&[
             (&lhs.to_affine(), &G2Prepared::from(-G2Affine::generator())),
             (&proof.to_affine(), &G2Prepared::from(rhs.to_affine())),
-        ]).final_exponentiation().is_identity();
+        ])
+        .final_exponentiation()
+        .is_identity();
 
         if bool::from(res) {
             Ok(())

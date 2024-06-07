@@ -220,5 +220,4 @@ impl FromStr for EncryptionKey {
     }
 }
 
-impl EncryptionKey {
-}
+impl EncryptionKey {}
