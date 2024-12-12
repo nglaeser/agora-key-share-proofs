@@ -1,5 +1,5 @@
 use crate::{DensePolyPrimeField, KeyShareProofError, KeyShareProofResult};
-use blsful::inner_types::group::prime::PrimeCurveAffine;
+use blsful::inner_types::PrimeCurveAffine;
 use blsful::inner_types::*;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};

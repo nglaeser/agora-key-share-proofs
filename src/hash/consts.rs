@@ -66,8 +66,8 @@ impl Iterator for UniversalHashIter {
 impl UniversalHashIter {
     pub fn new(point: HashPoint) -> Self {
         let total_bytes = match point {
-            HashPoint::G1 => G1_TOTAL_POINT_BYTES,
-            HashPoint::G2 => G2_TOTAL_POINT_BYTES,
+            HashPoint::G1 => G1_TOTAL_POINT_BYTES * 8,
+            HashPoint::G2 => G2_TOTAL_POINT_BYTES * 8,
         };
         UniversalHashIter {
             rng: ChaChaRng::from_seed(PARAMETER_SEED_RNG),

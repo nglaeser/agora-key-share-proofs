@@ -29,13 +29,15 @@ impl Universal {
     pub fn hash_g2(input: &[G2Projective; 2]) -> Scalar {
         let mut output = Scalar::ZERO;
         let mut iter = UniversalHashIter::new(HashPoint::G2);
-        for p in input {
-            for b in p.to_compressed() {
-                for j in (0..8).rev() {
-                    let (zero, one) = iter.next().expect("not enough parameters");
-                    let bit = (b >> j) & 1;
-                    output += Scalar::conditional_select(&zero, &one, Choice::from(bit));
-                }
+        for b in input[0]
+            .to_compressed()
+            .iter()
+            .chain(input[1].to_compressed().iter())
+        {
+            for j in (0..8).rev() {
+                let (zero, one) = iter.next().expect("not enough parameters");
+                let bit = (*b >> j) & 1;
+                output += Scalar::conditional_select(&zero, &one, Choice::from(bit));
             }
         }
         output

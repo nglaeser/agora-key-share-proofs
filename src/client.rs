@@ -48,9 +48,9 @@ impl SigningKey {
         polynomial.0[0] = self.0;
         for (i, share) in shares.iter_mut().enumerate() {
             let sc = polynomial.evaluate(&Scalar::from((i + 1) as u64));
-            share.id = (i + 1) as u16;
-            share.threshold = threshold as u16;
+            share.id = Scalar::from((i + 1) as u64);
             share.share = sc;
+            share.threshold = threshold as u16;
         }
 
         Ok((shares, polynomial))
@@ -73,15 +73,12 @@ impl SigningKey {
                 "Shares must have unique indices".to_string(),
             ));
         }
-        if shares.iter().any(|s| s.id == 0) {
+        if shares.iter().any(|s| s.id.is_zero().unwrap_u8() == 1) {
             return Err(KeyShareProofError::General(
                 "Shares must have indices greater than 0".to_string(),
             ));
         }
-        let shares = shares
-            .iter()
-            .map(|s| (Scalar::from(s.id as u64), s.share))
-            .collect_vec();
+        let shares = shares.iter().map(|s| (s.id, s.share)).collect_vec();
         let identifiers = shares.iter().map(|&s| s.0).collect_vec();
         let key = shares
             .iter()
@@ -117,7 +114,7 @@ impl SigningKey {
 
         let quotients = self.get_quotients(&poly, &encrypted_shares);
 
-        let domain_size = threshold.next_power_of_two();
+        let domain_size = (threshold + 1).next_power_of_two();
         let domain =
             GeneralEvaluationDomain::<Scalar>::new(domain_size).expect("Failed to create domain");
         let aux_domain = GeneralEvaluationDomain::<Scalar>::new(domain_size * 2)
@@ -209,7 +206,7 @@ impl SigningKey {
 /// A share of the signing key
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct SigningKeyShare {
-    pub(crate) id: u16,
+    pub(crate) id: Scalar,
     pub(crate) share: Scalar,
     pub(crate) threshold: u16,
 }
@@ -225,4 +222,37 @@ fn lagrange(id: Scalar, others: &[Scalar]) -> Scalar {
         den *= j - id;
     }
     num * den.invert().expect("denominator is zero")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DecryptionKeys;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+    use std::num::NonZeroUsize;
+
+    #[test]
+    fn test_register_proofs() {
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let sk = SigningKey(Scalar::random(&mut rng));
+        let threshold = 2;
+        let num_shares = 3;
+        let shares = sk.create_shares(threshold, num_shares, &mut rng).unwrap();
+        let reconstructed = SigningKey::from_shares(&shares.0).unwrap();
+        assert_eq!(sk, reconstructed);
+
+        let crs = KZG10CommonReferenceParams::setup(NonZeroUsize::new(4).unwrap(), &mut rng);
+
+        let dks_set = (0..3)
+            .map(|_| DecryptionKeys::random(&mut rng))
+            .collect::<Vec<_>>();
+        let eks_set = dks_set
+            .iter()
+            .map(|dk| EncryptionKeys::from(dk))
+            .collect::<Vec<_>>();
+
+        let payloads_res = sk.generate_register_payloads(threshold, &crs, &mut rng, &eks_set);
+        assert!(payloads_res.is_ok());
+    }
 }

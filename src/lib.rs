@@ -25,7 +25,6 @@ mod dense;
 mod encrypt;
 mod error;
 mod hash;
-mod hot;
 mod kzg;
 mod pedersen;
 mod sparse;
