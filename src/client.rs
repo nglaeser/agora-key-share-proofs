@@ -255,4 +255,35 @@ mod tests {
         let payloads_res = sk.generate_register_payloads(threshold, &crs, &mut rng, &eks_set);
         assert!(payloads_res.is_ok());
     }
+
+    #[test]
+    fn test_proofs_of_remembrance() {
+        let mut rng = ChaCha8Rng::from_seed([0u8; 32]);
+        let sk = SigningKey(Scalar::random(&mut rng));
+        let threshold = 2;
+        let num_shares = 3;
+        let shares = sk.create_shares(threshold, num_shares, &mut rng).unwrap();
+        let reconstructed = SigningKey::from_shares(&shares.0).unwrap();
+        assert_eq!(sk, reconstructed);
+
+        let crs = KZG10CommonReferenceParams::setup(NonZeroUsize::new(4).unwrap(), &mut rng);
+
+        let dks_set = (0..3)
+            .map(|_| DecryptionKeys::random(&mut rng))
+            .collect::<Vec<_>>();
+        let eks_set = dks_set
+            .iter()
+            .map(|dk| EncryptionKeys::from(dk))
+            .collect::<Vec<_>>();
+
+        let payloads_res = sk.generate_register_payloads(threshold, &crs, &mut rng, &eks_set);
+        assert!(payloads_res.is_ok());
+
+        let payloads = payloads_res.unwrap();
+
+        for (payload, eks) in payloads.iter().zip(eks_set.iter()) {
+            let hot_proof = eks.prove(&crs, payload.encrypted_share, payload.commitment, 0);
+            let _ = hot_proof.verify(&crs, 0);
+        }
+    }
 }

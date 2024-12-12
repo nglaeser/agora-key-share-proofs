@@ -92,9 +92,9 @@ impl EncryptionKeys {
         let s1 = Scalar::random(&mut rand::rngs::OsRng);
         let s2 = Scalar::random(&mut rand::rngs::OsRng);
         let a_comm_ped = params.commit(s1, s2);
-        let mut bytes = [0u8; 96 + 8];
-        bytes[..96].copy_from_slice(a_comm_ped.to_compressed().as_ref());
-        bytes[96..].copy_from_slice(&block_id.to_be_bytes());
+        let mut bytes = [0u8; 48 + 8];
+        bytes[..48].copy_from_slice(a_comm_ped.to_compressed().as_ref());
+        bytes[48..].copy_from_slice(&block_id.to_be_bytes());
         let c = Scalar::hash::<ExpandMsgXmd<sha2::Sha256>>(&bytes, b"BLS12381_XMD:SHA-256_RO_NUL_");
         let t1 = s1 + c * encrypted_share;
         let t2 = s2 + c * r;
@@ -237,9 +237,9 @@ impl HotStorageProof {
         ];
         let ref_args = args.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
 
-        let mut bytes = [0u8; 96 + 8];
-        bytes[..96].copy_from_slice(self.a_comm_ped.to_compressed().as_ref());
-        bytes[96..].copy_from_slice(&block_id.to_be_bytes());
+        let mut bytes = [0u8; 48 + 8];
+        bytes[..48].copy_from_slice(self.a_comm_ped.to_compressed().as_ref());
+        bytes[48..].copy_from_slice(&block_id.to_be_bytes());
         let c = Scalar::hash::<ExpandMsgXmd<sha2::Sha256>>(&bytes, b"BLS12381_XMD:SHA-256_RO_NUL_");
         let lhs = self.a_comm_ped + self.comm_ped * c;
         let rhs = params.commit(self.t1, self.t2);
